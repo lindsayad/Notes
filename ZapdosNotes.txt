@@ -3462,3 +3462,5 @@ So some things here make sense: we calculate an initial residual from the initia
 Alright, after all that haranguing, I believe I've convinced myself that my onInterface method only gets called once as it should and that the InterfaceKernel is only associated with one boundary ID corresponding to the boundary ID of the master sideset.
 
 Zapdos: 59-81
+
+This is a test.
