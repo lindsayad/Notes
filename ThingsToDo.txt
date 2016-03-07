@@ -1,0 +1,13 @@
+Things to do critical for immediate work (roughly in order of importance):
+
+1) Read over Zapdos chapter and then send to Graves and Gilligan
+2) Read and add to intro chapter so that can be sent to everyone on the committee
+
+Things to do in the ongoing quest for open source (not necessarily in order of importance) that are not necessarily critical to my immediate work:
+
+1) Move from iPhone to cyanogen_mod
+2) Figure out whether I can have dedicated servers at my residence
+2a) Build my dedicated servers
+2b) Move from github to gitlab on my own servers
+3) Figure out ssh keys for github
+4) Figure out how to do everything in sympy better than or equal to what I can do in Mathematica
