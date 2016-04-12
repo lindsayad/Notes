@@ -1,3 +1,5 @@
+\begin{document}
+
 Air Force postdoc research fellowship deadline: May 1st
 
 Here are my three threads I'm working concurrently on in the hope that one/some/all of them lead me to my goal of interfacing two physics domains (or as Yaqi I think aptly calls them InteriorNodalBC and InteriorIntegratedBC):
@@ -28,7 +30,7 @@ Going to really start investigating what prevents taking long time steps. With n
 EMACS COMMANDS:
 just move the point to the end of any sexp and press C-xC-e to execute just that sexp. Usually it's not necessary to reload the whole file if you're just changing a line or two.
 
-If you take care when choosing what keys to rebind, these will never conflict with keybindings of modes. When there is such a conflict, however, the more specific mode keymap will take precedence, and your global keybinding will be temporarily shadowed. If you do not care about the mode’s keybinding, or want a keybinding for a specific mode only, you need to guess the mode’s keymap name and add the binding to that map:
+If you take care when choosing what keys to rebind, these will never conflict with keybindings of modes. When there is such a conflict, however, the more specific mode keymap will take precedence, and your global keybinding will be temporarily shadowed.
 
     (define-key text-mode-map (kbd "'") 'maybe-open-apostrophe)
 
@@ -311,7 +313,7 @@ Two things to do:
 1) Make a couple of results summary slides of what I've done so far in Zapdos
 2) 5 modules (kernels, BCs) I would want to add to make Zapdos/Moose relevant for broader LTP community
 
-The steady state electron density as determined by zapdos does not differ based on whether an iterative or direct solve is used. The peak electron density for zapdos (both direct and iterative solutions) and the peak electron density for comsol differ by 5.1% (Which is actually fairly significant I suppose).
+The steady state electron density as determined by zapdos does not differ based on whether an iterative or direct solve is used. The peak electron density for zapdos (both direct and iterative solutions) and the peak electron density for comsol differ by 5.1\% (Which is actually fairly significant I suppose).
 
 MKL PARDISO: Intel Math Kernel Library PARallel Direct SOlver
 
@@ -446,7 +448,7 @@ Reducing the amount of output to the log file doesn't seem to have helped the pr
 2 processors: 97.0632 seconds
 1 processor: 141.503 seconds
 
-So computation time was reduced by 31%. E.g. it took 69% as long with 2 processors as it did with 1. With perfect parallelization that 69 number would be 50.
+So computation time was reduced by 31\%. E.g. it took 69\% as long with 2 processors as it did with 1. With perfect parallelization that 69 number would be 50.
 
 Here's the Jacobian test output for this ionization source residual and corresponding Jacobian:
 
@@ -2332,13 +2334,13 @@ Scaling up the Arp residual didn't remove the spikes. Removing the ion boundary 
 
 Delving into solution context here. This is from Quarteroni's Nonlinear Systems and Numerical Optimization text:
 
-"Theorem 7.1 thus confirms that Newton’s method is quadratically conver-
-gent only if x(0) is sufficiently close to the solution x∗ and if the Jacobian
+"Theorem 7.1 thus confirms that Newtons method is quadratically conver-
+gent only if x(0) is sufficiently close to the solution x and if the Jacobian
 matrix is nonsingular. Moreover, it is worth noting that the computational
 effort needed to solve the linear system (7.4) can be excessively high as n
 gets large. Also, the Jacobian could be ill-conditioned, which makes it quite diffi-
 cult to obtain an accurate solution. For these reasons, several modifications
-to Newton’s method have been proposed, which will be briefly considered
+to Newtons method have been proposed, which will be briefly considered
 in the later sections, referring to the specialized literature for further details
 (see [OR70], [DS83], [Erh97], [BS90] and the references therein)."
 
@@ -3103,7 +3105,7 @@ Dr. Graves was right: meshing can play a big old role in convergence!!!!
 
 So apparently python will look over a whole method to determine whether variables are global or local and then execute the statements in the method. If at anyplace in a method, a global variable is reassigned without that variable being declared global in the method, then that variable will be treated as a local variable.
 
-0a) Observation: total current changes by only 17% between gamma extremes
+0a) Observation: total current changes by only 17\% between gamma extremes
 0b) Consequently the total potential drop across the plasma only varies by that amount
 1) From 0b): Total potential drop more or less constant
 2) Sound backing: Build up in electrons at anode because of gamma
@@ -3466,3 +3468,76 @@ Zapdos: 59-81
 This is a test.
 
 This is test 2.
+
+Sure enough, removing the term with _grad_u in the vacuum boundary conditions removed the numerical oscillations at the boundaries, supporting Hagelaar's statement:  "In order to circumvent possible numerical difficulties in accurately evaluating the density gradient in this term, we will now rewrite Eq. 9."
+
+Now my problem is that I'm not sure if I trust the solution that I'm looking at.
+
+NEWTON and PJFNK with LU and SMP=full are the exact same solves. Taking out the full preconditioning, e.g. going to just block diagonal, is almost exactly the same.
+
+Next step for Zapdos: add back in all the physics. I'll probably go all the way to start. I always do :-)
+
+NEWTON incapable of solving 2d.i with the Postprocessor, both with timestep\_end and timestep\_begin. PJFNK can with both timestep\_end and timestep\_begin, however, not with nonlinear. NEWTON solves very very quickly once the Postprocessor is replaced with a Dirichlet anode.
+
+PJFNK is the only method that can solve my problem. FD and NEWTON cannot. Now, I can run PJFNK with SMP with timestep\_end or timestep\_begin, but I cannot run it with nonlinear. However, with PJFNK and FDP, I can run with nonlinear.
+
+Search your feelings Alex. Recognize that the FDP preconditioner did improve convergence of PJFNK, e.g. it was actually able to converge with postprocessor on nonlinear iterations. With SMP, it cannot converge on nonlinear. And recall that PJFNK is a form of Newton's method! These aren't some dramatically different class of solves! So the reality is that a better jacobian did help my convergence.
+
+Ok, after fixing the Jacobian in the Circuit dirichlet boundary condition, NEWTON + SMP + timestep\_end converges beautifully. NEWTON + FDP does not converge. NEWTON + SMP + nonlinear does not converge and neither does NEWTON + FDP + nonlinear. So convergers:
+
+PJFNK + SMP + timestep\_end
+PJFNK + FDP + timestep\_end
+PJFNK + FDP + nonlinear
+NEWTON + SMP + timestep\_end
+
+Divergers:
+
+PJFNK + SMP + nonlinear
+NEWTON + SMP + nonlinear
+NEWTON + FDP + timestep\_end
+
+Very cool...if I implement a penalty dirichlet version of my circuit potential, then I can see the Jacobian functional dependence coming from the postprocessor.
+
+What turns a Newton-Krylov method into a Jacobian-free Newton-Krylov method? The approximation made in eq 10 of the Knoll JFNK paper. Moving to the Jac-free method requires the introduction of the parameter $\epsilon$, which is the finite differencing parameter which MOOSE users can pass to PetSc. The Wikipedia article on preconditioning gives an excellent passage on why P should be chosen somewhere between the extremes of P = I and P = A, when we are solving the linear system Ax = b, where the left-preconditioned problem is: $P^{-1}\left(Ax - b\right) = 0$. It also describes preconditioned iterative methods. \textbf{Preconditioning only makes sense in the context of using an iterative method to solve the linear system of equations. There's no need for preconditioning if performing a direct solve of Ax = b.} Preconditioning is important for iterative linear methods because the rate of convergence increases as the condition number of the matrix decreases. A preconditioner of a matrix A is a matrix such that $P^{-1}A$ has a smaller condition number than A. Preconditioned iterative solvers typically outperform direct solvers, e.g. Gaussian elimination, for large, and especiallly for sparse, matrices.
+
+Wrap up for the night: The default solve in PetSc is a Preconditioned Newton-Krylov solve. We pass PetSc the Jacobian matrix (which we will now think of as A). We then create the preconditioning matrix P from ILU factorization of the Jacobian matrix A. We then proceed to iteratively solve the linear problem $P^{-1}\left(Ax - b\right) = 0$. We perform the preconditioning because it increases the rate of convergence of the iterative method because the condition number of $P^{-1}A$ is less than A. We can turn away from the PetSc default and move to the MOOSE default which is PJFNK by simply making the approximation of eq. 10 from Knoll and specifying the finite differencing parameter $\epsilon$. That is the only difference between the MOOSE and PetSc defaults! However, that seemingly small change can make it such that one can get away with much lazier Jacobian specification in MOOSE. When using PJFNK, the only purpose filling out the Jacobian in MOOSE has, is its effect on the preconditioning matrix P. It does not affect A, because we never explicitly form A. Instead we only estimate its action on a vector through use of the finite differencing parameter $\epsilon$. Boom. Done for the night. If one has the perfect jacobian (or at least a very good one), direct methods will always be more accurate than iterative methods, they just may be too computationally expensive. If one does not have the perfect or very good jacobian, than a jacobian-free method may be more likely converge because the ``true'' Jacobian is being felt through finite differencing of the residual. Cool!
+
+Round-trip Raleigh-Calgary (June 18th-23rd): $550
+Raleigh-Calgary (June 18th): $231
+Seattle-Raleigh (June 30th): $231.60
+
+So Zapdos will take time steps with all the kernels active and all the non-linearity in transport and townsend coefficients active and ion boundary conditions active; however, the moment I try to add electron or electron energy boundary conditions, then I can't even solve for one nonlinear iteration.
+
+texlive-extra-utils
+texlive-font-utils
+texlive-fonts-extra
+texlive-bibtex-extra
+texlive-formats-extratexlive-generic-recommended
+texlive-humanities
+
+A lot of the above items are dependencies for texlive-full -> may just have to reinstall texlive-full
+
+Solved the problem immediately above.
+
+Current problem to fix with Zapdos: diffusion-only electron boundary condition leads to residual equal to 10$^{139}$. Fixed that. Alright convergence with HagelaarIonDiffusionBC for electrons. And now convergence with addition of HagelaarIonAdvectionBC for electrons. so why doesn't combination work? Is it the addition of the secondaries from ion fluxes? It does indeed appear that in the case of the electrons, the numerical problems are coming from the secondary electron terms. Alright removing the n\_gamma terms resulted in convergence. I am also able to restore the diffusive portion of the ion flux for seconday electron calculations.
+
+Trying to add back energy boundary condition now. Won't work with n\_gamma; however, it does work without n\_gamma.
+
+Also, somehow I'm now able to run my integral postprocessor on every nonlinear iteration and achieve convergence. Don't have a good reason for that one.
+
+Explanation for different bulk profiles with varying $gamma_{en}$ reflection:
+
+
+
+0a) Observation: total current changes by only 17\% between gamma extremes
+0b) Consequently the total potential drop across the plasma only varies by that amount
+1) From 0b): Total potential drop more or less constant
+2) Sound backing: Build up in electrons at anode because of gamma
+3) From 0a): Total current more or less constant. In order for this to be true, the cathode characteristics must be the same because we aren't changing the cathodic boundary conditions.
+4) From 2) electric field becomes large and negative, leading to a large potential drop in the anode.
+5) From 1) and 4) for smaller gammas, the potential drop in the bulk will be smaller because more potential is being lost in the anode.
+6) From 5) the bulk electric field is smaller for smaller gammas
+7) With a smaller bulk electric field, in order to maintain the same total current between cases, the *density* of electrons (and with quasineutrality consequently the ions) must be higher!
+
+
+\end{document}

@@ -1,0 +1,14 @@
+Problems where sympy doesn't compare satisfactorily to Mathematica (e.g. where I want to add capability):
+
+Mathematica:
+
+In[3]:= Integrate[Log[eh/e]*Sqrt[e - ec*Vp], e]
+
+Out[3]= 2/9 (6 ec^(3/2) Vp^(3/2)
+     ArcTan[Sqrt[e - ec Vp]/(Sqrt[ec] Sqrt[Vp])] +
+   Sqrt[e - ec Vp] (2 (e - 4 ec Vp) + 3 (e - ec Vp) Log[eh/e]))
+
+Sympy:
+
+In [17]: integrate(log(eh/e) * sqrt(e - ec * Vp),e)
+Out[17]: Integral(sqrt(-Vp*ec + e)*log(eh/e), e)
