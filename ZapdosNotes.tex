@@ -3542,4 +3542,32 @@ Explanation for different bulk profiles with varying $gamma_{en}$ reflection:
 2d\_rate\_coeffs failed at 6.02826e-9 seconds. No advection stabilization. Arp\_lin and em\_lin results looked fine. No oscillations. Potential also looked fine. Some small oscillations observed in mean\_en. Going to try some stabilization.
 
 Currently EfieldArtDiff does not have position scaling included in it. Also might need to check its Jacobian.
+
+Conductivity of aluminum: 3.77x10$^7/(\Omega m)$.
+
+MOOSE model has power deposition at interface of .1e10 W m$^{-3}$. -> 1e9 W $m^{-3}$
+What about VHF source? 420 W. Let's say 3 cm diameter, 3 cm length -> 2e7 W $m^{-3}$. Looks like 100 times less if we're assuming an even power deposition. Of course power deposition in most of the DC discharge is zero. I wonder what the average power deposition for that system is.
+
+Let's just go with the electron density. Electron density at the interface: 3e22 $m^{-3}$. Mobility = 1.74e-7 m2 / (s*V). Resulting conductivity = 8.3e-4. That's really low.
+
+Total Concentration of salt in a .5 M NaCl solution = 6e26. Thats much higher than the free electron concentration I'm calculating in Zapdos.
+
+Diffusivity = 4.5e-9 m2/s.
+
+Ok, using 1 mm thick water with radius = 1.125 cm, eps\_r = 80 and a conductivity of 1e-3 S/m, I get an impedance for the water layer of 4.84e-3 - 3.49j
+
+How does this compare with the plasma? Look at one of Brandon's early presentations or thesis. 420 W air plasma impedance: 37.7 - 263.5j.
+
+Conduction current and displacement current. Conduction current: motion of free charges.
+
+Bound current has two components! 1) Vacuum permittivity times the time variation of the electric field and 2) the time variation of the polarizability of the material. For linear isotropic dielectric:
+
+\begin{equation}
+  \vec{P} = \epsilon_0\left(\epsilon_r-1\right)\vec{E}
+\end{equation}
+
+Thus in a vacuum, obviously the polarizability is zero.
+
+Able to reproduce the behavior suggested by Lieberman that when the collisional frequency is sufficiently low, the plasma behaves inductively, e.g. the reactance is positive. However, as the collision frequency increases (e.g. as we increase the gas pressure) the reactance becomes negative.
+
 \end{document}
