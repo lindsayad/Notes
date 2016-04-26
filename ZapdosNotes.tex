@@ -3570,4 +3570,8 @@ Thus in a vacuum, obviously the polarizability is zero.
 
 Able to reproduce the behavior suggested by Lieberman that when the collisional frequency is sufficiently low, the plasma behaves inductively, e.g. the reactance is positive. However, as the collision frequency increases (e.g. as we increase the gas pressure) the reactance becomes negative.
 
+PJFNK is able to take much longer time steps with Preconditioning type = SMP than NEWTON is. I think this clearly shows the important role that the missing potential Jacobian is playing. PJFNK is able to feel out that missing Jacobian piece by using finite differencing of the residuals.
+
+Tried doing a JFNK run and the benefit of preconditioning is quite obvious. Even with the first solve, we were at over 200 linear iterations without achieving convergence. Going to a preconditioner matrix with the block components filled resulted in convergence after 8 linear iterations. Going to a preconditioner matrix with all elements filled (full = true) resulted in convergence after 4 linear iterations.
+
 \end{document}

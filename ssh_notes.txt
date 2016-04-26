@@ -1,0 +1,9 @@
+\begin{document}
+
+id_ras.pub on my laptop matches the ky in authorized_keys on my NCSU desktop.
+
+User private key is never revealed to anyone, including the server.
+
+Sever private key should also not be accessible to anyone else. It is set-up at the time the SSH server is set-up.
+
+User public key is known to the server and is sotred in authorized_keys
