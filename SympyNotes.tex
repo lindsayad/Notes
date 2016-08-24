@@ -1,0 +1,205 @@
+\begin{document}
+
+  Problems where sympy doesn't compare satisfactorily to Mathematica (e.g. where I want to add capability):
+
+Mathematica:
+
+In[3]:= Integrate[Log[eh/e]*Sqrt[e - ec*Vp], e]
+
+Out[3]= 2/9 (6 ec^(3/2) Vp^(3/2)
+     ArcTan[Sqrt[e - ec Vp]/(Sqrt[ec] Sqrt[Vp])] +
+   Sqrt[e - ec Vp] (2 (e - 4 ec Vp) + 3 (e - ec Vp) Log[eh/e]))
+
+Sympy:
+
+In [17]: integrate(log(eh/e) * sqrt(e - ec * Vp),e)
+Out[17]: Integral(sqrt(-Vp*ec + e)*log(eh/e), e)
+
+def null_safe(rule):
+    """ Return original expr if rule returns None """
+    def null_safe_rl(expr):
+        result = rule(expr)
+        if result is None:
+            return expr
+        else:
+            return result
+    return null_safe_rl
+
+def do_one(*rules):
+    """ Try each of the rules until one works. Then stop. """
+    def do_one_rl(expr):
+        for rl in rules:
+            result = rl(expr)
+            if result != expr:
+                return result
+        return expr
+    return do_one_rl
+
+def switch(key, ruledict):
+    """ Select a rule based on the result of key called on the function """
+    def switch_rl(expr):
+        rl = ruledict.get(key(expr), identity)
+        return rl(expr)
+    return switch_rl
+
+def key(integral):
+    integrand = integral.integrand
+
+    if isinstance(integrand, TrigonometricFunction):
+        return TrigonometricFunction
+    elif isinstance(integrand, sympy.Derivative):
+        return sympy.Derivative
+    elif symbol not in integrand.free_symbols:
+        return sympy.Number
+    else:
+        for cls in (sympy.Pow, sympy.Symbol, sympy.exp, sympy.log,
+                    sympy.Add, sympy.Mul, sympy.atan, sympy.asin, sympy.acos, sympy.Heaviside):
+            if isinstance(integrand, cls):
+                return cls
+
+
+Nested functions can easily be used to return a function. And that can be used to create the nice double paranthese syntax that I've seen and had yet to understand:
+
+import math
+def make_cylinder_volume_func(r):
+    def volume(h):
+        return math.pi * r * r * h
+    return volume
+
+volume = make_cylinder_volume_func(5)(3)
+print(volume)
+
+Ok this is making some sense: do_one is a function with a nested function that it returns. Thus to perform an assignment using do_one, we need to pass two parentheses of arguments. The first parenthetical group is the rules we want to consider, and the second paranthetical group is the expression.
+
+Example integrands where my new rule works:
+
+\begin{enumerate}
+\item ln(x) * sqrt(x)
+\item ln(x) * x**7
+\item ln(x-7) * x**7
+\item ln(x**2) * x**7
+\end{enumerate}
+
+Integrands where new rule fails:
+
+\begin{enumerate}
+\item sqrt(x-y) * ln(x)
+  \begin{itemize}
+  \item Output: (x - y)**(3/2) * (2 * log(x) / 3 - 4/9)
+  \item Expected output: 2/9 * (-6 * y**(3/2) * atan(sqrt(x - y) / sqrt(y)) + sqrt(x - y) * (-2x + 8y + 3(x-y)*log(x)))
+  \end{itemize}
+\item (x-y)**3 * log(x)
+  \begin{itemize}
+  \item Output: (x - y)**4*(log(x)/4 - 1/16)
+  \item expected output: 1/48 x (-3 x^3 + 16 x^2 y - 36 x y^2 + 48 y^3 + 12 (x^3 - 4 x^2 y + 6 x y^2 - 4 y^3) Log[x])
+  \end{itemize}
+\end{enumerate}
+
+Currently, where log_pow_product rule shines (or is even used) is when dealing with logarithms multiplied by monomials with non-integer exponents. Currently it only works when the logarithm is simply the logarithm of the argument, and when the monomial base is a simple sympy.Symbol.
+
+I am going to limit myself to considering a log function multiplied by a power function. The arguments of both the log function and the power function can be Mul or Add.
+
+Boom, baby! I got my issue request integral to work under certain conditions for y. Boom baby!!! That requires the s_over_x rule.
+
+So the line in manualintegrate.py that's causing the manual tests to fail is this line:
+
+        polys = [arg for arg in integrand.args if (arg.is_polynomial(symbol) or isinstance(arg, sympy.Pow))]
+
+where the old line was:
+
+polys = [arg for arg in integrand.args if (arg.is_polynomial(symbol))]
+
+New Integrand capabilities with my PR:
+
+sqrt(x-y) * log(z/x) [neither integrate or manualintegrate could handle this]
+sqrt(x) * log(x) [manualintegrate could not handle this but integrate could]
+sqrt(a*x + b) / x [manualintegrate could not handle this but integrate could]
+
+Unsupported integrands (even with my PR):
+
+u**2 / (u**2 - b) [manualintegrate cannot handle this but integrate can]
+
+Good to know that the polylog solution comes from the meijerg integration method.
+
+The 107 tests in test_integrals on 10847 branch take 69.12 seconds to solve.
+The 19 tests in test_manual on 10847 branch take 29.12 seconds to solve. (longest test is my test, particularly the big rational function problem)
+
+The 17 tests in test_manual on master branch take 8.65 seconds to solve.
+The 107 tests in test_integrals on master branch take 69.16 seconds.
+
+So just based off those speed numbers, I see no reason why my test_integrals should display.
+
+I'm curious how in one case there are 107 tests in test_integrals, but in Travis's ``slow'' test, there only appear to be 3 tests in test_integrals. That's something to explore after lunch.
+
+(1 + 2*exp(-2*I*pi*i*x/L) + exp(-4*I*pi*i*x/L))/(4*a*exp(-2*I*pi*i*x/L) + 4*b*x*exp(-2*I*pi*i*x/L))
+
+2*Piecewise((x/(4*a), Eq(b, 0)), (log(4*a + 4*b*x)/(4*b), True)) + Integral(1/(4*a*exp(-2*I*pi*i*x/L) + 4*b*x*exp(-2*I*pi*i*x/L)), x) + Integral(1/(4*a*exp(2*I*pi*i*x/L) + 4*b*x*exp(2*I*pi*i*x/L)), x)
+
+1/(4*a*exp(2*I*pi*i*x/L) + 4*b*x*exp(2*I*pi*i*x/L))
+
+Integral(1/(4*a*exp(2*I*pi*i*x/L) + 4*b*x*exp(2*I*pi*i*x/L)), x)
+
+By itself with 10847:
+
+test_issue_7130 - Took 19.387 seconds
+Still running at 51.653 seconds
+test_issue_7130 - Took 14.441 seconds
+test_issue_7130 - Took 14.324 seconds
+Still running at 108.912 seconds (using two processors at 100%)
+test_issue_7130 - Took 16.119 seconds
+Still running at 62 seconds
+test_issue_7130 - Took 12.612 seconds
+
+By itself with master:
+
+test_issue_7130 - Took 13.190 seconds
+test_issue_7130 - Took 13.245 seconds
+test_issue_7130 - Took 12.713 seconds
+test_issue_7130 - Took 13.869 seconds
+test_issue_7130 - Took 16.770 seconds
+
+Back to 10847:
+Still running at 36.246 seconds
+test_issue_7130 - Took 13.795 seconds
+
+To 0d09436
+test_issue_7130 - Took 12.526 seconds
+test_issue_7130 - Took 16.150 seconds
+test_issue_7130 - Took 13.179 seconds
+test_issue_7130 - Took 13.391 seconds
+test_issue_7130 - Took 13.771 seconds
+
+/home/lindsayad/miniconda2/envs/python3SympyDev/lib/python3.5/subprocess.py
+
+To 10847 in debug mode:
+test_issue_7130 - Took 62.913 seconds
+test_issue_7130 - Took 65.362 seconds
+test_issue_7130 - Took 58.745 seconds
+
+/home/lindsayad/miniconda2/envs/python3SympyDev/lib/python3.5/site-packages/sympy/core/numbers.py
+
+-Integral(2*exp(2*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(2*exp(2*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4 - Integral(exp(4*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(exp(4*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4 - Integral(1/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(1/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4
+
+pass
+
+This is the integral passed to manualintegrate for the stupid slow integral test:
+(1 + 2*exp(-2*I*pi*i*x/L) + exp(-4*I*pi*i*x/L))/(4*a*exp(-2*I*pi*i*x/L) + 4*b*x*exp(-2*I*pi*i*x/L))
+
+result from sage:
+
+-1/4*e^(2*pi*a/(L*b))*exp_integral_e(1, 2*pi*(b*x + a)/(L*b))/b - 1/4*e^(-2*pi*a/(L*b))*exp_integral_e(1, -2*pi*(b*x + a)/(L*b))/b + 1/2*log(b*x + a)/b
+
+Result of actual test integral with master branch:
+
+-Integral(2*exp(2*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(2*exp(2*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4 - Integral(exp(4*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(exp(4*I*pi*i*x/L)/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4 - Integral(1/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, 0))/4 + Integral(1/(a*exp(2*I*pi*i*x/L) + b*x*exp(2*I*pi*i*x/L)), (x, L))/4
+
+In other words zero integration is done. So again I am getting penalized because I made manualintegrate do more work!!!
+
+Pass
+Pass
+Pass
+Pass
+Pass
+
+
+\end{document}

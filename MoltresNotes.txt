@@ -1,0 +1,7 @@
+Whether the pressure is pinned or not, the velocity profile is identical. That's a plus.
+
+However, the profiles are different depending on whether the pressure is integrated by parts or not.
+
+So the oscillations are not caused by the convective term in the NS momentum equation. It's definitely caused by the radial boundary condition at the axis of symmetry.
+
+Fantastic description of different classes of boundary conditions: http://www.math.ttu.edu/~klong/Sundance/html/bcs.html

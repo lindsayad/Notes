@@ -3576,16 +3576,307 @@ Tried doing a JFNK run and the benefit of preconditioning is quite obvious. Even
 
 Presentation notes from Caroline:
 
-1) Abrupt transition between slides 26 and 27
-2) Explain why we ever added baking soda and why we explored its effects on the solution chemistry
-3) Further bridge between modelling and experiments and applications.
+1) Abrupt transition between slides 26 and 27 x
+2) Explain why we ever added baking soda and why we explored its effects on the solution chemistry x
+3) Further bridge between modelling and experiments and applications. x
 
 Presentation notes from Steve:
 
-1) Flip interfacial concentration and hydrophobic uptake slides
-2) Highlight questions
-3) Slide 28: give full name for PFOS and PFOA
-4) Slide 36-37: delete character in title
-5) Slide 59: Get rid of separation between our group and community
+1) Flip interfacial concentration and hydrophobic uptake slides x
+2) Highlight questions x
+3) Slide 28: give full name for PFOS and PFOA x
+4) Slide 36-37: delete character in title x
+5) Slide 59: Get rid of separation between our group and community x
+
+My notes:
+
+\begin{enumerate}
+\item Give description of nitrite vs nitrate before moving into description of water chemistry. Overall just make that transition into water chemistry better x
+\item Fix quality of some of the figures in the water chemistry portion of the talk x
+\item Delete some unimportant slides x
+\item Add slide numbers x
+\item Send out slides and print slides
+
+\end{enumerate}
+
+Ok, by running mean\_en\_postprocessor.i I've confirmed that the physics implemented in the combination of SideTotFluxIntegral and CircuitDirichletPotential are correct. E.g. the residuals implemented are correct. However, convergence is inefficient and slow. I want my correct Jacobians!!!!
+
+Comparing analytic vs. finite differenced Jacobian with mean\_en.i test file:
+
+Analytic: Active time = 17.286 seconds, number of time steps = 126
+FDP: unable to converge
+
+This is what existed in ComputeUserObjectsThread before Daniel started working on it:
+
+ComputeUserObjectsThread::ComputeUserObjectsThread(FEProblem & problem, SystemBase & sys, const NumericVector<Number>& in\_soln, std::vector<UserObjectWarehouse> & user\_objects, UserObjectWarehouse::GROUP group) :
+    ThreadedElementLoop<ConstElemRange>(problem, sys),
+    \_soln(in\_soln),
+    \_user\_objects(user\_objects),
+    \_group(group)
+{
+}
+
+Two separate flights
+189.23
+250.60
+
+One round-trip flight
+401.33
+
+Alright, I believe my suspicions are correct. If I use mesh size of 1, then the Jacobian is perfect. However, if I use a mesh size of 2, then it is wrong. I believe that this is because we have a disagreement between -_phi.size and the size of the _jacobian_information which is assigned a length of n_dofs(). n_dofs() divided by the number of variables equals the number of nodes and the number of total shape functions if everyone is linear lagrange. But number of nodes only equals _phi.size() if the mesh size is one.
+
+First call to computeOffDiagJacobian: _v_dofs[0] = 1, _v_dofs[1] = 4, _u_dofs[0] = 0, _u_dofs[1] = 3
+
+_v_dofs.size() and _u_dofs.size() = 2.
+_shp_jacobian.size() = 9
+
+After a whole bunch of calls, I believe we move to a different element because then _v_dofs[0] = 4. (Note that the kernel object, denoted by the memory location *this*, is the same as for the other element). So it appears that the Jacobian handling process is perfectly correct in the kernel object. So now we have to move back and look at how the Jacobian is being computed in the UserObject.
+
+Contents of the _shp_jacobian vector: {0.015625, 0.0078125, 0, 0.010416666666666668, 0.0052083333333333339, 0, 0.015625, 0.0078125, 0}
+
+Ok, so we are passing the argument cj which is of type ComputeFullJacobianThread to a function whose second argument is supposed to be a reference to a variable of type Body. How does that work for type checking?
+
+Here's output from action system:
+
+[DBG][ACT] Action Dependency Sets:
+[DBG][ACT] (deprecated_block, finish_input_file_output, meta_action, no_action, setup_oversampling)
+[DBG][ACT] (dynamic_object_registration)
+[DBG][ACT] (common_output)
+[DBG][ACT]	CommonOutputAction
+[DBG][ACT] (set_global_params)
+[DBG][ACT] (setup_recover_file_base)
+[DBG][ACT]	SetupRecoverFileBaseAction
+[DBG][ACT] (check_copy_nodal_vars)
+[DBG][ACT]	u
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT]	v
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT]	w
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT] (setup_mesh)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshAction (setup_mesh, init_mesh)
+[DBG][ACT] (add_partitioner)
+[DBG][ACT] (init_mesh)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshAction (init_mesh, setup_mesh)
+[DBG][ACT] (prepare_mesh)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshCompleteAction (prepare_mesh, execute_mesh_modifiers, setup_mesh_complete, uniform_refine_mesh)
+[DBG][ACT] (add_mesh_modifier)
+[DBG][ACT] (execute_mesh_modifiers)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshCompleteAction (execute_mesh_modifiers, prepare_mesh, setup_mesh_complete, uniform_refine_mesh)
+[DBG][ACT] (add_mortar_interface)
+[DBG][ACT] (uniform_refine_mesh)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshCompleteAction (uniform_refine_mesh, execute_mesh_modifiers, prepare_mesh, setup_mesh_complete)
+[DBG][ACT] (setup_mesh_complete)
+[DBG][ACT]	Mesh
+[DBG][ACT]	SetupMeshCompleteAction (setup_mesh_complete, execute_mesh_modifiers, prepare_mesh, uniform_refine_mesh)
+[DBG][ACT] (determine_system_type)
+[DBG][ACT]	Executioner
+[DBG][ACT]	DetermineSystemType
+[DBG][ACT] (create_problem)
+[DBG][ACT]	CreateProblemAction
+[DBG][ACT] (setup_time_integrator)
+[DBG][ACT] (setup_executioner)
+[DBG][ACT]	Executioner
+[DBG][ACT]	CreateExecutionerAction
+[DBG][ACT] (setup_time_stepper)
+[DBG][ACT] (setup_predictor)
+[DBG][ACT] (setup_postprocessor_data)
+[DBG][ACT] (init_displaced_problem)
+[DBG][ACT]	Mesh
+[DBG][ACT]	CreateDisplacedProblemAction
+[DBG][ACT] (add_aux_variable, add_elemental_field_variable, add_variable)
+[DBG][ACT]	u
+[DBG][ACT]	AddVariableAction
+[DBG][ACT]	v
+[DBG][ACT]	AddVariableAction
+[DBG][ACT]	w
+[DBG][ACT]	AddVariableAction
+[DBG][ACT] (setup_variable_complete)
+[DBG][ACT] (setup_quadrature)
+[DBG][ACT]	SetupQuadratureAction
+[DBG][ACT] (add_function)
+[DBG][ACT] (add_periodic_bc)
+[DBG][ACT] (add_user_object)
+[DBG][ACT]	example_uo
+[DBG][ACT]	AddUserObjectAction
+[DBG][ACT] (setup_function_complete)
+[DBG][ACT] (setup_adaptivity)
+[DBG][ACT] (set_adaptivity_options)
+[DBG][ACT] (add_ic)
+[DBG][ACT]	InitialCondition
+[DBG][ACT]	AddICAction
+[DBG][ACT]	InitialCondition
+[DBG][ACT]	AddICAction
+[DBG][ACT] (add_constraint, add_preconditioning, add_split)
+[DBG][ACT]	smp
+[DBG][ACT]	SetupPreconditionerAction
+[DBG][ACT] (ready_to_init)
+[DBG][ACT]	EmptyAction
+[DBG][ACT] (setup_dampers)
+[DBG][ACT]	SetupDampersAction
+[DBG][ACT] (setup_residual_debug)
+[DBG][ACT] (add_bounds_vectors)
+[DBG][ACT] (add_multi_app)
+[DBG][ACT] (add_transfer)
+[DBG][ACT] (copy_nodal_aux_vars, copy_nodal_vars)
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT]	u
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT]	v
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT]	w
+[DBG][ACT]	CopyNodalVarsAction
+[DBG][ACT] (add_material)
+[DBG][ACT] (setup_material_output)
+[DBG][ACT]	MaterialOutputAction
+[DBG][ACT] (init_problem)
+[DBG][ACT]	InitProblemAction
+[DBG][ACT] (setup_debug)
+[DBG][ACT] (add_output)
+[DBG][ACT] (add_postprocessor)
+[DBG][ACT] (add_vector_postprocessor)
+[DBG][ACT] (add_aux_kernel, add_aux_scalar_kernel, add_bc, add_damper, add_dg_kernel, add_dirac_kernel, add_indicator, add_interface_kernel, add_kernel, add_marker, add_nodal_kernel, add_scalar_kernel)
+[DBG][ACT]	diff_u
+[DBG][ACT]	AddKernelAction
+[DBG][ACT]	diff_v
+[DBG][ACT]	AddKernelAction
+[DBG][ACT]	shape_w
+[DBG][ACT]	AddKernelAction
+[DBG][ACT]	time_u
+[DBG][ACT]	AddKernelAction
+[DBG][ACT]	time_v
+[DBG][ACT]	AddKernelAction
+[DBG][ACT] (add_control)
+[DBG][ACT] (check_output)
+[DBG][ACT]	CheckOutputAction
+[DBG][ACT] (check_integrity)
+[DBG][ACT]	CheckIntegrityAction
+
+
+[DBG][ACT] Executing actions:
+[DBG][ACT] TASK (           common_output) TYPE (              CommonOutputAction) NAME (                )
+[DBG][ACT] TASK ( setup_recover_file_base) TYPE (      SetupRecoverFileBaseAction) NAME (                )
+[DBG][ACT] TASK (   check_copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               u)
+[DBG][ACT] TASK (   check_copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               v)
+[DBG][ACT] TASK (   check_copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               w)
+[DBG][ACT] TASK (              setup_mesh) TYPE (                 SetupMeshAction) NAME (            Mesh)
+[DBG][ACT] TASK (               init_mesh) TYPE (                 SetupMeshAction) NAME (            Mesh)
+[DBG][ACT] TASK (            prepare_mesh) TYPE (         SetupMeshCompleteAction) NAME (            Mesh)
+[DBG][ACT] TASK (  execute_mesh_modifiers) TYPE (         SetupMeshCompleteAction) NAME (            Mesh)
+[DBG][ACT] TASK (     uniform_refine_mesh) TYPE (         SetupMeshCompleteAction) NAME (            Mesh)
+[DBG][ACT] TASK (     setup_mesh_complete) TYPE (         SetupMeshCompleteAction) NAME (            Mesh)
+[DBG][ACT] TASK (   determine_system_type) TYPE (             DetermineSystemType) NAME (     Executioner)
+[DBG][ACT] TASK (          create_problem) TYPE (             CreateProblemAction) NAME (                )
+[DBG][ACT] TASK (       setup_executioner) TYPE (         CreateExecutionerAction) NAME (     Executioner)
+[DBG][ACT] TASK (  init_displaced_problem) TYPE (    CreateDisplacedProblemAction) NAME (            Mesh)
+[DBG][ACT] TASK (            add_variable) TYPE (               AddVariableAction) NAME (               u)
+[DBG][ACT] TASK (            add_variable) TYPE (               AddVariableAction) NAME (               v)
+[DBG][ACT] TASK (            add_variable) TYPE (               AddVariableAction) NAME (               w)
+[DBG][ACT] TASK (        setup_quadrature) TYPE (           SetupQuadratureAction) NAME (                )
+[DBG][ACT] TASK (         add_user_object) TYPE (             AddUserObjectAction) NAME (      example_uo)
+[DBG][ACT] TASK (                  add_ic) TYPE (                     AddICAction) NAME (InitialCondition)
+[DBG][ACT] TASK (                  add_ic) TYPE (                     AddICAction) NAME (InitialCondition)
+[DBG][ACT] TASK (     add_preconditioning) TYPE (       SetupPreconditionerAction) NAME (             smp)
+[DBG][ACT] TASK (           ready_to_init) TYPE (                     EmptyAction) NAME (                )
+[DBG][ACT] TASK (           setup_dampers) TYPE (              SetupDampersAction) NAME (                )
+[DBG][ACT] TASK (     copy_nodal_aux_vars) TYPE (             CopyNodalVarsAction) NAME (                )
+[DBG][ACT] TASK (         copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               u)
+[DBG][ACT] TASK (         copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               v)
+[DBG][ACT] TASK (         copy_nodal_vars) TYPE (             CopyNodalVarsAction) NAME (               w)
+[DBG][ACT] TASK (   setup_material_output) TYPE (            MaterialOutputAction) NAME (                )
+[DBG][ACT] TASK (            init_problem) TYPE (               InitProblemAction) NAME (                )
+[DBG][ACT] TASK (              add_output) TYPE (                 AddOutputAction) NAME (         console)
+[DBG][ACT] TASK (              add_kernel) TYPE (                 AddKernelAction) NAME (          diff_u)
+[DBG][ACT] TASK (              add_kernel) TYPE (                 AddKernelAction) NAME (          diff_v)
+[DBG][ACT] TASK (              add_kernel) TYPE (                 AddKernelAction) NAME (         shape_w)
+[DBG][ACT] TASK (              add_kernel) TYPE (                 AddKernelAction) NAME (          time_u)
+[DBG][ACT] TASK (              add_kernel) TYPE (                 AddKernelAction) NAME (          time_v)
+[DBG][ACT] TASK (            check_output) TYPE (               CheckOutputAction) NAME (                )
+[DBG][ACT] TASK (         check_integrity) TYPE (            CheckIntegrityAction) NAME (                )
+
+Note the type of _sub_Kee:
+
+  /// jacobian contributions
+  std::vector<std::vector<DenseMatrix<Number> > > _sub_Kee;
+
+  It's a vector of a vector of DenseMatrices; you access individual DenseMatrices by specifying the ivar and the jvar. So how are the dimensions of the DenseMatrices determined? And when?
+
+  Exploring ability to ignore floating point exceptions. After adding ignore functions in NeumannCircuitVoltageMoles_KV.C, here is the backtrace:
+
+    * frame #0: 0x00007ffff78818b6 libzapdos-dbg.so.0`_ZNK7libMesh10TypeVectorIdEmlIdEENS_9boostcopy11enable_if_cIXsr12ScalarTraitsIT_EE5valueENS0_INS_12CompareTypesIdS5_E9supertypeEEEE4typeES5_(this=0x00007fffffffc1d8, factor=+Inf) + 38 at type_vector.h:731
+    frame #1: 0x00007ffff7873a06 libzapdos-dbg.so.0`_ZN7libMeshmlIddEENS_9boostcopy11enable_if_cIXsr12ScalarTraitsIT0_EE5valueENS_10TypeVectorINS_12CompareTypesIT_S3_E9supertypeEEEE4typeES3_RKNS4_IS6_EE(factor=+Inf, v=0x00007fffffffc1d8) + 38 at type_vector.h:746
+    frame #2: 0x00007ffff79ceac0 libzapdos-dbg.so.0`NeumannCircuitVoltageMoles_KV::computeQpResidual(this=0x0000000000d79540) + 528 at NeumannCircuitVoltageMoles_KV.C:99
+    frame #3: 0x00007ffff6bcbd05 libmoose-dbg.so.0`IntegratedBC::computeResidual(this=0x0000000000d79540) + 325 at IntegratedBC.C:117
+    frame #4: 0x00007ffff673f333 libmoose-dbg.so.0`ComputeResidualThread::onBoundary(this=0x00007fffffffc718, elem=0x0000000000af4160, side=0, bnd_id=3) + 419 at ComputeResidualThread.C:132
+    frame #5: 0x00007ffff660b164 libmoose-dbg.so.0`ThreadedElementLoopBase<libMesh::StoredRange<libMesh::MeshBase::const_element_iterator, libMesh::Elem const*> >::operator(this=0x00007fffffffc718, range=0x0000000000b4a530, bypass_threading=false)(libMesh::StoredRange<libMesh::MeshBase::const_element_iterator, libMesh::Elem const*> const&, bool) + 740 at ThreadedElementLoopBase.h:173
+    frame #6: 0x00007ffff6863f4b libmoose-dbg.so.0`void libMesh::Threads::parallel_reduce<libMesh::StoredRange<libMesh::MeshBase::const_element_iterator, libMesh::Elem const*>, ComputeResidualThread>(range=0x0000000000b4a530, body=0x00007fffffffc718) + 155 at threads_tbb.h:160
+    frame #7: 0x00007ffff684f1ad libmoose-dbg.so.0`NonlinearSystem::computeResidualInternal(this=0x0000000000b11cf0, type=KT_ALL) + 541 at NonlinearSystem.C:1271
+    frame #8: 0x00007ffff684ed32 libmoose-dbg.so.0`NonlinearSystem::computeResidual(this=0x0000000000b11cf0, residual=0x0000000000be3370, type=KT_ALL) + 434 at NonlinearSystem.C:765
+    frame #9: 0x00007ffff65fd20c libmoose-dbg.so.0`FEProblem::computeResidualType(this=0x0000000000b0f7d0, soln=0x0000000000b0d350, residual=0x0000000000be3370, type=KT_ALL) + 652 at FEProblem.C:3355
+    frame #10: 0x00007ffff65fcb3d libmoose-dbg.so.0`FEProblem::computeResidual(this=0x0000000000b0f7d0, (null)=0x0000000000b0ce60, soln=0x0000000000b0d350, residual=0x0000000000be3370) + 93 at FEProblem.C:3295
+    frame #11: 0x00007ffff684a4d1 libmoose-dbg.so.0`NonlinearSystem::solve(this=0x0000000000b11cf0) + 225 at NonlinearSystem.C:244
+    frame #12: 0x00007ffff65fbc81 libmoose-dbg.so.0`FEProblem::solve(this=0x0000000000b0f7d0) + 129 at FEProblem.C:3074
+    frame #13: 0x00007ffff6be24f4 libmoose-dbg.so.0`TimeStepper::step(this=0x0000000000b48f70) + 36 at TimeStepper.C:188
+    frame #14: 0x00007ffff6bfba31 libmoose-dbg.so.0`Transient::solveStep(this=0x0000000000b518d0, input_dt=-1) + 625 at Transient.C:415
+    frame #15: 0x00007ffff6bfb650 libmoose-dbg.so.0`Transient::takeStep(this=0x0000000000b518d0, input_dt=-1) + 480 at Transient.C:342
+    frame #16: 0x00007ffff6bfb213 libmoose-dbg.so.0`Transient::execute(this=0x0000000000b518d0) + 211 at Transient.C:255
+    frame #17: 0x00007ffff674f4e9 libmoose-dbg.so.0`MooseApp::executeExecutioner(this=0x00000000006c1f80) + 265 at MooseApp.C:428
+    frame #18: 0x00007ffff675044c libmoose-dbg.so.0`MooseApp::run(this=0x00000000006c1f80) + 140 at MooseApp.C:578
+    frame #19: 0x0000000000411473 zapdos-dbg`main(argc=3, argv=0x00007fffffffd1e8) + 211 at main.C:23
+    frame #20: 0x00007fffee640830 libc.so.6`__libc_start_main(main=(zapdos-dbg`main at main.C:12), argc=3, argv=0x00007fffffffd1e8, init=<unavailable>, fini=<unavailable>, rtld_fini=<unavailable>, stack_end=0x00007fffffffd1d8) + 240 at libc-start.c:291
+    frame #21: 0x00000000004112c9 zapdos-dbg`_start + 41
+
+    Now, I'm trying to add a similar ignore function in libmesh type_vector.h.
+
+      break libmesh_handleFPE
+  run ...
+  bt
+
+  #0  0x00007ffff78818dd in libMesh::TypeVector<double>::operator*<double> (this=0x7fffffffc198, factor=inf)
+    at /home/lindsayad/projects_devel/moose/scripts/../libmesh/installed/include/libmesh/type_vector.h:734
+#1  0x00007ffff7873a06 in libMesh::operator*<double, double> (factor=inf, v=...)
+    at /home/lindsayad/projects_devel/moose/scripts/../libmesh/installed/include/libmesh/type_vector.h:749
+#2  0x00007ffff79ceaf0 in NeumannCircuitVoltageMoles_KV::computeQpResidual (this=0xd7a160)
+    at /home/lindsayad/projects_devel/zapdos/src/bcs/NeumannCircuitVoltageMoles_KV.C:99
+#3  0x00007ffff6bcbda5 in IntegratedBC::computeResidual (this=0xd7a160)
+    at /home/lindsayad/projects_devel/moose/framework/src/bcs/IntegratedBC.C:117
+#4  0x00007ffff673f3d3 in ComputeResidualThread::onBoundary (this=0x7fffffffc6d8, elem=0xaf4280, side=0, bnd_id=3)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/ComputeResidualThread.C:132
+#5  0x00007ffff660b204 in ThreadedElementLoopBase<libMesh::StoredRange<libMesh::MeshBase::const_element_iterator, libMesh::Elem const*> >::operator() (this=0x7fffffffc6d8, range=..., bypass_threading=false)
+    at /home/lindsayad/projects_devel/moose/framework/include/base/ThreadedElementLoopBase.h:173
+#6  0x00007ffff6863feb in libMesh::Threads::parallel_reduce<libMesh::StoredRange<libMesh::MeshBase::const_element_iterator, libMesh::Elem const*>, ComputeResidualThread> (range=..., body=...)
+    at /home/lindsayad/projects_devel/moose/scripts/../libmesh/installed/include/libmesh/threads_tbb.h:160
+#7  0x00007ffff684f24d in NonlinearSystem::computeResidualInternal (this=0xb11ec0, type=Moose::KT_ALL)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/NonlinearSystem.C:1271
+#8  0x00007ffff684edd2 in NonlinearSystem::computeResidual (this=0xb11ec0, residual=..., type=Moose::KT_ALL)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/NonlinearSystem.C:765
+#9  0x00007ffff65fd2ac in FEProblem::computeResidualType (this=0xb0f9a0, soln=..., residual=..., type=Moose::KT_ALL)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/FEProblem.C:3355
+#10 0x00007ffff65fcbdd in FEProblem::computeResidual (this=0xb0f9a0, soln=..., residual=...)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/FEProblem.C:3295
+#11 0x00007ffff684a571 in NonlinearSystem::solve (this=0xb11ec0)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/NonlinearSystem.C:244
+#12 0x00007ffff65fbd21 in FEProblem::solve (this=0xb0f9a0) at /home/lindsayad/projects_devel/moose/framework/src/base/FEProblem.C:3074
+#13 0x00007ffff6be2594 in TimeStepper::step (this=0xb49100)
+    at /home/lindsayad/projects_devel/moose/framework/src/timesteppers/TimeStepper.C:188
+#14 0x00007ffff6bfbad1 in Transient::solveStep (this=0xb51b00, input_dt=-1)
+    at /home/lindsayad/projects_devel/moose/framework/src/executioners/Transient.C:415
+#15 0x00007ffff6bfb6f0 in Transient::takeStep (this=0xb51b00, input_dt=-1)
+    at /home/lindsayad/projects_devel/moose/framework/src/executioners/Transient.C:342
+#16 0x00007ffff6bfb2b3 in Transient::execute (this=0xb51b00)
+    at /home/lindsayad/projects_devel/moose/framework/src/executioners/Transient.C:255
+#17 0x00007ffff674f589 in MooseApp::executeExecutioner (this=0x6c2030)
+    at /home/lindsayad/projects_devel/moose/framework/src/base/MooseApp.C:428
+#18 0x00007ffff67504ec in MooseApp::run (this=0x6c2030) at /home/lindsayad/projects_devel/moose/framework/src/base/MooseApp.C:578
+    #19 0x0000000000411473 in main (argc=3, argv=0x7fffffffd1a8) at /home/lindsayad/projects_devel/zapdos/src/main.C:23
+
+    Through experimentation I discovered that making the time stamp of the Makefile newer than the files it's compiled does not cause a recompilation.
+
+agf93f
 
 \end{document}
