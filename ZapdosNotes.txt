@@ -3877,6 +3877,25 @@ Note the type of _sub_Kee:
 
     Through experimentation I discovered that making the time stamp of the Makefile newer than the files it's compiled does not cause a recompilation.
 
-agf93f
+    agf93f
+
+    Timing:
+    \begin{itemize}
+    \item direct LU solve time = 22 seconds (obviousy with solve\_type=Newton)
+    \item solve\_type=PFJNK -pc\_type=bjacobi -sub\_pc\_type=lu solve time = 85 seconds; also much
+      worse convergence without -sub\_pc\_type=lu
+    \item solve\_type=PFJNK -pc\_type=asm -sub\_pc\_type=lu solve time = 85 seconds; also much
+      worse convergence without -sub\_pc\_type=lu
+      \item solve\_type=PFJNK -pc\_type=ilu very slow convergence (doesn't converge at all without
+        -sub\_pc\_type=lu
+    \item solve\_type=NEWTON, -pc\_type=asm -sub\_pc\_type=lu solve time = 22
+      seconds; pretty close to the direct solve. I think this is proof of just
+      how superior the NEWTON method is when the Jacobian is correct
+
+Ok with whatever changes happened in MOOSE: -pc_type=asm, -sub_pc_type = lu, solve time = 238 seconds so way longer. What the hell changed? It has to be something with Jacobians right?
+
+Gamg doesn't work well.
+
+Alright dope, I can get NEWTON iterative (with pc_type = asm and sub_pc_type = lu) and NEWTON direct to solve at the same speed!!!! And thus I have a problem that can be naturally scaled in parallel!!!
 
 \end{document}
