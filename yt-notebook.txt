@@ -1,0 +1,142 @@
+That's great! In principle, it shouldn't be too difficult. This will be a good
+test of whether our code generation is flexible enough.
+
+1) The first thing you'd need to do is add an entry to
+`yt/utilities/mesh_types.yaml`. That should let you auto-generate the necessary
+Jacobian and stuff for 2nd order Lagrange triangles.
+
+2) Then, you'd create a new subclass of `NonLinearSolveSampler2D` in
+`yt/utilities/lib/element_mappings.pyx` that uses the autogened code. You could
+model this on `Q1Sampler2D`, which does this for 1st-order quad
+elements.
+
+3) Finally, you'd need to expand the logic where the mesh samplers are
+selected to account for the new element type.
+
+The first time fill_selector_mask is called, type(self) is
+yt.frontends.exodus_ii.data_structures.ExodusIIUnstructuredMesh
+
+The second time fill_selector_mask is called, type(self) is the exact same
+
+However, let's see: first time, selector = SliceSelector. Yea and the second
+time, selector = RegionSelector
+
+First call backtrace:
+
+ /home/lindsayad/yt-hg/yt-exodus-data-handling.py(21)<module>()
+-> s1 = yt.SlicePlot(ds, 'z', 'vel_x')
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1986)SlicePlot()
+-> return AxisAlignedSlicePlot(ds, normal, fields, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1311)__init__()
+-> slc.get_data(fields)
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(1220)get_data()
+-> self.index._identify_base_chunk(self)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(62)_identify_base_chunk()
+-> dobj.size = self._count_selection(dobj)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)_count_selection()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)<genexpr>()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(147)count()
+-> mask = self._get_selector_mask(selector)
+> /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(165)_get_selector_mask()
+-> self._last_mask = mask = selector.fill_mesh_cell_mask(self)
+
+
+Second call backtrace:
+
+ /home/lindsayad/yt-hg/yt-exodus-data-handling.py(21)<module>()
+-> s1 = yt.SlicePlot(ds, 'z', 'vel_x')
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1986)SlicePlot()
+-> return AxisAlignedSlicePlot(ds, normal, fields, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1315)__init__()
+-> window_size=window_size, aspect=aspect, right_handed=right_handed)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(656)__init__()
+-> PlotWindow.__init__(self, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(224)__init__()
+-> self._setup_plots()
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(744)_setup_plots()
+-> self._recreate_frb()
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(285)_recreate_frb()
+-> self._frb._get_data_source_fields()
+  /home/lindsayad/yt-hg/yt/visualization/fixed_resolution.py(162)_get_data_source_fields()
+-> self[f]
+  /home/lindsayad/yt-hg/yt/visualization/fixed_resolution.py(141)__getitem__()
+-> int(self.antialias))
+  /home/lindsayad/yt-hg/yt/geometry/coordinates/cartesian_coordinates.py(77)pixelize()
+-> field_data = ad[field]
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(279)__getitem__()
+-> self.get_data(f)
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(1220)get_data()
+-> self.index._identify_base_chunk(self)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(62)_identify_base_chunk()
+-> dobj.size = self._count_selection(dobj)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)_count_selection()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)<genexpr>()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(147)count()
+-> mask = self._get_selector_mask(selector)
+> /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(165)_get_selector_mask()
+-> self._last_mask = mask = selector.fill_mesh_cell_mask(self)
+
+Third call backtrace:
+
+ /home/lindsayad/yt-hg/yt-exodus-data-handling.py(21)<module>()
+-> s1 = yt.SlicePlot(ds, 'z', 'vel_x')
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1986)SlicePlot()
+-> return AxisAlignedSlicePlot(ds, normal, fields, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1311)__init__()
+-> slc.get_data(fields)
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(1220)get_data()
+-> self.index._identify_base_chunk(self)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(62)_identify_base_chunk()
+-> dobj.size = self._count_selection(dobj)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)_count_selection()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)<genexpr>()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(147)count()
+-> mask = self._get_selector_mask(selector)
+> /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(165)_get_selector_mask()
+-> self._last_mask = mask = selector.fill_mesh_cell_mask(self)
+
+Fourth call backtrace:
+
+  /home/lindsayad/yt-hg/yt-exodus-data-handling.py(21)<module>()
+-> s1 = yt.SlicePlot(ds, 'z', 'vel_x')
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1986)SlicePlot()
+-> return AxisAlignedSlicePlot(ds, normal, fields, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(1315)__init__()
+-> window_size=window_size, aspect=aspect, right_handed=right_handed)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(656)__init__()
+-> PlotWindow.__init__(self, *args, **kwargs)
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(224)__init__()
+-> self._setup_plots()
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(744)_setup_plots()
+-> self._recreate_frb()
+  /home/lindsayad/yt-hg/yt/visualization/plot_window.py(285)_recreate_frb()
+-> self._frb._get_data_source_fields()
+  /home/lindsayad/yt-hg/yt/visualization/fixed_resolution.py(162)_get_data_source_fields()
+-> self[f]
+  /home/lindsayad/yt-hg/yt/visualization/fixed_resolution.py(141)__getitem__()
+-> int(self.antialias))
+  /home/lindsayad/yt-hg/yt/geometry/coordinates/cartesian_coordinates.py(77)pixelize()
+-> field_data = ad[field]
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(279)__getitem__()
+-> self.get_data(f)
+  /home/lindsayad/yt-hg/yt/data_objects/data_containers.py(1220)get_data()
+-> self.index._identify_base_chunk(self)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(62)_identify_base_chunk()
+-> dobj.size = self._count_selection(dobj)
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)_count_selection()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/geometry/unstructured_mesh_handler.py(67)<genexpr>()
+-> count = sum((m.count(dobj.selector) for m in meshes))
+  /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(147)count()
+-> mask = self._get_selector_mask(selector)
+> /home/lindsayad/yt-hg/yt/data_objects/unstructured_mesh.py(165)_get_selector_mask()
+-> self._last_mask = mask = selector.fill_mesh_cell_mask(self)
+
+Each patch belonging to a certain element will have the same vertices and the
+same field data. Fact.
