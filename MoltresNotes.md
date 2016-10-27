@@ -21,3 +21,6 @@ coordinates whether the pressure is integrated by parts or not. The open flow
 problem is solved correctly in cylindrical coordinates if the pressure is not
 integrated by parts; but currently it does not converge to a solution if the
 pressure is integrated by parts.
+
+Tomorrow, record eigenvalue and flux values for different choices of the
+postprocessor. Understand why the choice doesn't matter.
