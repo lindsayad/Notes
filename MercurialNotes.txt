@@ -1,0 +1,4 @@
+To pull from remote and then update the current bookmark:
+
+hg pull yt_analysis
+hg update

@@ -63,3 +63,27 @@ asm-lu pre, full=false: linear its = 20
 asm-lu pre, full=true: linear its = 17
 default pre, full=true: linear its = 11
 default pre, full=fase: linear its = 11
+
+Ok, _grad_zero is of type std::vector<VariableGradient>. The length of the
+vector is equal to the number of threads. Each element of the vector is created
+like this: _grad_zero[tid].resize(getMaxQps(), RealGradient(0.));
+- The type of VariableGradient is MooseArray<RealGradient>. The array has length
+  equal to the number of quadrature points in the geometric element. And each
+  element is of type RealGradient which is of type RealVectorValue.
+- How are RealVectorValues initialized?
+- RealVectorValue is of type VectorValue<Real>
+- And VectorValue is a templated class
+
+Environments for compiling on cray:
+
+- module load cray-petsc
+- module load cray-hdf5
+- module switch PrgEnv-cray PrgEnv-gcc
+- module load cray-mpich
+
+So with a full preconditioner, it took 6 nonlinear iterations with PJFNK (it
+does not converge with NEWTON within 50 nonlinear iterations). 7 nonlinear
+iterations with just the diagonal components on the preconditioner...moreover
+the number of linear iterations required was quite a bit higher. It also took 6
+nonlinear iterations with line_search turned back on with PJFNK and with the
+full preconditioner.
